@@ -1,0 +1,19 @@
+{
+  "name": "lol.ghostie.b4menu",
+  "displayName": "B4 Native VR Menu",
+  "version": "1.0.2",
+  "unity": "6000.0",
+  "description": "Unity 6 bindings and renderer for the b4-native C++ VR wrist menu (Quest, Android arm64).",
+  "keywords": ["vr", "quest", "menu", "native"],
+  "dependencies": {
+    "com.unity.modules.xr": "1.0.0",
+    "com.unity.modules.audio": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Basic",
+      "description": "Registers an example toggle, action and soundboard entry.",
+      "path": "Samples~/Basic"
+    }
+  ]
+}
