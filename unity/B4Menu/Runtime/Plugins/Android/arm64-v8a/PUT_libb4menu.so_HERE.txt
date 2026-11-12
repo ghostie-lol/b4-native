@@ -1,0 +1,2 @@
+Drop libb4menu.so (the "libb4menu-arm64-v8a" artifact from the GitHub Actions build) into this folder.
+The Releases zip already contains it. The editor script configures it as Android / ARM64 only when it is imported.
