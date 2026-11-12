@@ -1,8 +1,21 @@
-name: Build arm64 lib
+name: Build and release
 
 on:
   push:
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (no leading v)'
+        required: true
+        default: '1.0.2'
+      release:
+        description: 'Publish a GitHub release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -10,19 +23,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure (arm64-v8a, Quest 3S)
+      - name: Resolve version
+        id: v
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure (arm64-v8a, Quest)
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-29 \
-            -DANDROID_STL=c++_shared \
+            -DANDROID_STL=c++_static \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build
 
+      - name: Verify library
+        run: |
+          BIN=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+          LIB=build/libb4menu.so
+          file "$LIB"
+          $BIN/llvm-readelf -h "$LIB" | grep -q AArch64
+          $BIN/llvm-readelf -d "$LIB" | grep NEEDED || true
+          if $BIN/llvm-readelf -d "$LIB" | grep -q "libc++_shared"; then
+            echo "libb4menu.so depends on libc++_shared.so, expected a static STL"; exit 1
+          fi
+          COUNT=$($BIN/llvm-nm -D --defined-only "$LIB" | grep -c " B4_")
+          echo "exported B4_ symbols: $COUNT"
+          test "$COUNT" -ge 18
+
+      - name: Assemble Unity package
+        run: |
+          V=${{ steps.v.outputs.version }}
+          PKG=unity/B4Menu
+          cp build/libb4menu.so "$PKG/Runtime/Plugins/Android/arm64-v8a/libb4menu.so"
+          rm -f "$PKG/Runtime/Plugins/Android/arm64-v8a/PUT_libb4menu.so_HERE.txt"
+          sed -i -E "s/\"version\": \"[^\"]+\"/\"version\": \"$V\"/" "$PKG/package.json"
+          (cd unity && zip -rq "../B4Menu-unity6-$V.zip" B4Menu)
+          unzip -l "B4Menu-unity6-$V.zip" | grep -E "libb4menu|package.json"
+
       - uses: actions/upload-artifact@v4
         with:
           name: libb4menu-arm64-v8a
           path: build/libb4menu.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: B4Menu-unity6-${{ steps.v.outputs.version }}
+          path: B4Menu-unity6-${{ steps.v.outputs.version }}.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          name: ${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            B4Menu-unity6-${{ steps.v.outputs.version }}.zip
+            build/libb4menu.so
