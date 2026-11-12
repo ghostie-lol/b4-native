@@ -21,5 +21,8 @@ target_include_directories(b4menu PRIVATE
 
 target_compile_options(b4menu PRIVATE -O2 -fvisibility=default -Wall)
 
+# 16 KB page alignment (required for Android 15+ devices / newer Unity 6 builds)
+target_link_options(b4menu PRIVATE -Wl,-z,max-page-size=16384)
+
 find_library(log-lib log)
 target_link_libraries(b4menu ${log-lib})
